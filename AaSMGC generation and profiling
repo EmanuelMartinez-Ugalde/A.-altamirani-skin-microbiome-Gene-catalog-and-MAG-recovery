@@ -1,0 +1,67 @@
+###################################
+#       Ambystoma altamirani      #
+#     skin metagenome analysis    #
+# Martínez-Ugalde & Rebollar 2023 #
+###################################
+
+#Gene catalog creation,abudnace profiling and functional anotation
+
+
+#Creation of a gene catalog from contigs higher than 500bp recovered from individual assemblies
+
+mkdir AaSMGC
+
+#Combine contigs from all samples 
+cp Megahit_assemblies/sample_name.filtered.final.contigs.fasta AaSMGC
+sed 's/>/>lname/' -i lname.fasta #re-name heades of contig fasta files 
+cat *.fa > Alta_catalog.fa #concatenate contig fasta files
+
+#ORF predition 
+prodigal -p meta -i AaSMGC/Alta_catalog.fa \
+         -o Alta_catalog.genecoords.gff \
+         -a Alta_catalog.protein.translations.faa \
+         -d Alta_catalog.nucleotide.seq.fa \
+
+#Recover ORFs higher than 100bp         
+reformat.sh in=Alta_catalog.nucleotide.seq.fa out=Alta_catalog_higher100.nucleotide.seq.fa minlength=100
+
+#De-replicate the AaSMGC
+cd-hit-est -i AaSMGC/Alta_catalog_higher100.nucleotide.seq.fa -o AaSMGC/Alta_catalog_drep.fa -c 0.95 -n 8 -G 0 -aS 0.9 -g 1 -d 0
+
+#Abundace profiling of AaSMGC
+#Create a gtf file for feature counts
+grep -v "·" Alta_catalog.gff | grep "ID=" | cut -f1 -d ';' | sed 's/ID=//g' | cut -f1,4,5,7,9 |  awk -v OFS='\t' '{print $1,"rtracklayer","CDS",$2,$3,".",$4,".","gene_id " $5}' > ALTACATmap.gtf
+
+#Build an AaSMGC catalog index and map reads from each sample to catalog
+mkdir AaSMGC_index
+bowtie2-build AaSMGC/Alta_catalog_drep.fa AaSMGC_index
+
+bowtie2 -p 24 --very-sensitive-local -x AaSMGC_index \
+        -1 Trim_reads/name/of/the/forward/fastq/files_1.fq \
+        -2 Trim_reads/name/of/the/reverse/fastq/files_2.fq \
+        -S name/for/outfile.sam
+
+for file in $(ls *.sam); do samtools view -bS $file > $file.bam; done
+for file in $(ls *.bam); do samtools view -b -F 4 $file > Mapped/${file}; done
+
+#Count mapped reads using featureCounts
+featureCounts -O -p -C -t CDS -g gene_id -a ALTACATmap.gtf -o ALTACATCount.txt Mapped/*.bam
+
+
+#Fucntional profiling of AaSMGC using eggnog-mapper
+
+emapper.py --cpu 40 -m diamond --itype CDS --translate --evalue 0.00001 \
+           -i AaSMGC/Alta_catalog_drep.fa \
+           -o AaSMGC/NRCatalog \
+           --decorate_gff yes \
+           --excel \
+           --report_orthologs \
+           --data_dir /data/bases/eggnogdb/
+
+
+
+
+
+
+
+
