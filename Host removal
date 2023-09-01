@@ -1,0 +1,76 @@
+###################################
+#       Ambystoma altamirani      #
+#     skin metagenome analysis    #
+# Martínez-Ugalde & Rebollar 2023 #
+###################################
+
+#Script for host sequence removal and potential contamination
+
+#For this script the genome assemblies AmbMex60DD (Ambysotma altamirani) and GRCh38 (Homo sapiens)
+#were used to generate a Bowtie index
+
+#Reference genome download
+mkdir ref_genomes
+
+rsync -t -v rsync://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt ./
+rsync -t -v rsync://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt ./
+
+grep -E 'Ambystoma.*' assembly_summary_genbank.txt | cut -f 8,9,14,15,16
+grep -E 'Homo.*sapiens' assembly_summary_refseq.txt | cut -f 8,9,14,15,16 
+
+grep -E 'Ambystoma.*' assembly_summary_genbank.txt | cut -f 20 > Ambystoma_ftp_links.txt
+grep -E 'Homo.*sapiens' assembly_summary_refseq.txt | cut -f 20 > Homo_ftp_links.txt
+
+wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/002/915/635/GCA_002915635.3_AmbMex60DD
+wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14
+
+mv GCA_002915635.3_AmbMex60DD ref_genomes
+mv GCF_000001405.40_GRCh38.p14 ref_genomes
+
+#Create Bowtie2 index
+cat ref_genomes/*.fna > mexicanun_sapines_genomes.fna
+bowtie2-build mexicanun_sapines_genomes.fna concat_index
+
+#Define index
+mkdir Bowtie_index
+export Bowtie_index=/path/to/index/files/
+mv ref_genomes/*.bt2 Bowtie_index
+
+#Mapping reads againts the concatenated Bowtie index
+mkdir mapped_unmapped_files
+
+bowtie2 --sensitive --dovetail -p 16 -x Bowtie_index/concat_index \
+        -1 Trim_reads/name/of/the/forward/fastq/files_1.fq \
+        -2 Trim_reads/name/of/the/reverse/fastq/files_2.fq \
+        -S mapped_unmapped_files/name/for/outfile.sam
+        
+#Convert from Sam to Bam
+
+for file in $(ls *.sam); do samtools view -bS $file > $file.bam; done
+
+#Recover unmaped reads
+#-f 12 recover only aligments with both unmaped reads
+#-F 256 ignore aligments which are not primary aligment
+
+for file in $(ls *.bam); do samtools view -b -f 12 -F 256 $file > ; done
+
+
+#Split forward and reverse reads
+
+mkdir Sort
+for file in $(ls *.bam); do samtools sort -m 10G -@ 4 $file -o Sort/${file}; done
+
+mkdir Reads
+for file in $(ls *.bam); do \
+samtools fastq -@ 8 $file -1 Reads/${file}_host_removed_R1.fastq.gz \
+-2 Read/${file}_host_removed_R2.fastq.gz \
+-0 /dev/null -s /dev/null -n; done
+
+
+
+
+
+
+
+
+
