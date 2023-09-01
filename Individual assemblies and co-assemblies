@@ -1,0 +1,85 @@
+###################################
+#       Ambystoma altamirani      #
+#     skin metagenome analysis    #
+# Martínez-Ugalde & Rebollar 2023 #
+###################################
+
+
+#Script for metagenome assembly
+
+#Individual assemblies
+
+SAMPLES=`cut -f 1 sample_metadata.txt | sed '1d'`
+
+for i in $Samples do;
+  megahit  --presets meta-sensitive \ 
+  -1 Reads/${SAMPLE}_host_removed_R1.fastq.gz \
+  -2 Reads/${SAMPLE}_host_removed_R2.fastq.gz \
+  -t 16 -m 0.5 -o Megahit_assemblies/${i}; done
+
+
+#Co-assemblies
+#Files from samples of each season and Bd infection status were stored into specific directories
+
+mkdir SumBd
+mkdir SumNBd
+mkdir AuBd
+mkdir AuNBd
+mkdir WinBd
+mkdir WinNBd
+mkdir SprBd
+mkdir SprNBd
+
+cp files/whithin/Summer/and/Bdinfected SumBd
+cp files/whithin/Summer/and/noinfected SumNBd
+cp files/whithin/Autumn/and/Bdinfected AuBd
+cp files/whithin/Autumn/and/noinfected AuNBd
+cp files/whithin/Winter/and/Bdinfected WinBd
+cp files/whithin/Winter/and/noinfected WinNBd
+cp files/whithin/Spring/and/Bdinfected SprBd
+cp files/whithin/Spring/and/noinfected SprNBd
+
+#Create ambient variables
+
+SumBDR1=`ls Reads/SumBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+SumBDR2=`ls Reads/SumBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+
+SumNBDR1=`ls Reads/SumNBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+SumNBDR2=`ls Reads/SumNBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+
+AuBDR1=`ls Reads/AuBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+AuBDR2=`ls Reads/AuBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+
+AuNBDR1=`ls Reads/AuNBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+AuNBDR2=`ls Reads/AuNBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+
+WinBDR1=`ls Reads/WinBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+WinBDR2=`ls Reads/WinBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+
+WinNBDR1=`ls Reads/WinNBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+WinNBDR2=`ls Reads/WinNBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+
+SprBDR1=`ls Reads/SprBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+SprBDR2=`ls Reads/SprBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+
+SprNBDR1=`ls Reads/SprNBd/*R1* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+SprNBDR2=`ls Reads/SprNBd/*R2* | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))
+
+
+megahit --presets meta-sensitive -1 $SumBDR1 -2 $SumBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_SUMBD 
+megahit --presets meta-sensitive -1 $SumNBDR1 -2 $SumNBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_SUMNBD 
+
+megahit --presets meta-sensitive -1 $AuBDR1 -2 $AuBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_AUBD 
+megahit --presets meta-sensitive -1 $AuNBDR1 -2 $AuNBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_AUNBD 
+
+megahit --presets meta-sensitive -1 $WinBDR1 -2 $WinBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_WINBD 
+megahit --presets meta-sensitive -1 $WinNBDR1 -2 $WinNBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_WINNBD 
+
+megahit --presets meta-sensitive -1 $SprBDR1 -2 $SprBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_SPRBD 
+megahit --presets meta-sensitive -1 $SprNBDR1 -2 $SprNBDR2 -t 22 -m 0.85 -o MEGAHITCOAS_SPRNBD 
+
+
+
+#Recover contigs with a minimun length of 500bp using BBmap
+
+reformat.sh in=/path/to/sample/final.contigs.fa out=/path/to/sample/filtered.final.contigs.fasta minlength=500
