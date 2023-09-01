@@ -1,13 +1,13 @@
 ###################################
 #       Ambystoma altamirani      #
 #     skin metagenome analysis    #
-# Martínez-Ugalde & Rebollar 2023 #
+# MartÃ­nez-Ugalde & Rebollar 2023 #
 ###################################
 
 #Script for raw read pre-processing 
 #QC and trimming
 
-#1.- Software requirements
+#Software requirements
 
 #FastQC https://www.bioinformatics.babraham.ac.uk/projects/fastqc/
 #TrimGaolre https://github.com/FelixKrueger/TrimGalore
