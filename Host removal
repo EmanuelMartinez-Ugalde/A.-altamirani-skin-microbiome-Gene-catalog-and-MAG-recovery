@@ -1,10 +1,10 @@
 ###################################
 #       Ambystoma altamirani      #
 #     skin metagenome analysis    #
-# Martínez-Ugalde & Rebollar 2023 #
+# MartÃ­nez-Ugalde & Rebollar 2023 #
 ###################################
 
-#Script for host sequence removal and potential contamination
+#Script for host sequence removal and potential human contamination
 
 #For this script the genome assemblies AmbMex60DD (Ambysotma altamirani) and GRCh38 (Homo sapiens)
 #were used to generate a Bowtie index
