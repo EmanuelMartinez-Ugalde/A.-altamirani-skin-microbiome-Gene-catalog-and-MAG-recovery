@@ -1,0 +1,116 @@
+###################################
+#       Ambystoma altamirani      #
+#     skin metagenome analysis    #
+# Martínez-Ugalde & Rebollar 2023 #
+###################################
+
+#Script for diversity analysis
+
+#Load libraries
+
+suppressMessages(library(readxl))
+suppressMessages(library(readr))
+suppressMessages(library(tidyverse))
+suppressMessages(library(dplyr))
+suppressMessages(library(grid))
+suppressMessages(library(ggpubr))
+suppressMessages(library(vegan))
+suppressMessages(library(glue))
+suppressMessages(library(ecole))
+suppressMessages(library(ggplot))
+
+
+#Load files
+counts = read.csv(file = "path/to/featureCounts/file.csv", row.names = 1, sep = ";")
+sampinf = read.csv(file = "path/to/metadata/file.csv", sep = ";")
+
+onlyFUNC = filter(counts, COG_category != "No annotation")#Filter not annotated genes
+
+#Convert counts to tpm
+CtoTPM = counts[,9:length(counts)]
+Len = onlyFUNC[,8]
+geninfo = onlyFUNC[,1:4]
+CtoTPM = onlyFUNC[,9:length(onlyFUNC)]
+Len1 = onlyFUNC[,8]
+x = CtoTPM / Len 
+tpmMAT = t(t(x)*1e6 / colSums(x))
+TPMcounts = cbind(geninfo,tpmMAT)
+TPMcounts = TPMcounts[,c(1,5:length(TPMcounts))]
+CtoTPM_Tran = t(tpmMAT)
+
+#set a seed for permutation analysis
+addTaskCallback(function(...){set.seed(15021991);TRUE})
+
+#Create a Bray-Curtis distance matrix
+BrayDist = vegdist(CtoTPM_Tran, distance = "bray")
+
+#PCoA
+pcoa_altaMeta = cmdscale(BrayDist, eig = TRUE, add = TRUE)
+position = pcoa_altaMeta$points
+colnames(position) = c("PCoA1", "PCoA2")
+percent_explained = 100 * pcoa_altaMeta$eig / sum(pcoa_altaMeta$eig)
+round_precentage = format(round(percent_explained[1:2], digits = 1), nsmall = 1,trim = T)
+lab = c(glue("PCo 1 ({round_precentage[1]}%)"),
+        glue("PCo 2 ({round_precentage[2]}%)"))
+Seas_order = c("Summer", "Autumn", "Winter", "Spring")
+elev = c("High", "Medium","Low")
+BdStatus1 = c("Infected", "Non-infected")
+
+#Plot PCoA
+PCoA_Season = position %>%
+  as_tibble(rownames = "SampleID") %>%
+  left_join(sampinf) %>%
+  mutate(Season = factor(Season, levels = Seas_order))%>%
+  ggplot(aes(x = PCoA1, y = PCoA2, color = Season))+
+  geom_point(size = 4, alpha = 0.7)+
+  scale_color_manual(values= c("#fcb91eff", "#d66610ff", "#7e587eff", "#73a16cff"))+
+  labs(x=lab[1], y=lab[2])+
+  theme_classic()
+
+
+PCoA_Elevation = position %>%
+  as_tibble(rownames = "SampleID") %>%
+  left_join(sampinf) %>%
+  mutate(ElevationRange  = factor(ElevationRange , levels = elev))%>%
+  ggplot(aes(x = PCoA1, y = PCoA2, color = ElevationRange))+
+  geom_point(size = 4, alpha = 0.7)+
+  scale_color_manual(values = c("#006680a6","#c83771a6","#784421a6" )) +
+  labs(x=lab[1], y=lab[2])+
+  theme_classic()
+
+
+PCoA_Bd = position %>%
+  as_tibble(rownames = "SampleID") %>%
+  left_join(sampinf) %>%
+  ggplot(aes(x = PCoA1, y = PCoA2, color = BdStatus))+
+  geom_point(size = 4, alpha = 0.7)+
+  scale_color_manual(values = c("#6b6ca3","#87bcbd")) +
+  labs(x=lab[1], y=lab[2])+
+  theme_classic()
+  
+
+
+#PERMANOVA to evaluate single and combned efects
+
+BrayDist0_mat = as.matrix(BrayDist)
+Data_PERMANOVA = cbind(sampinf, qq)
+permut = 10000
+
+distMAT = BrayDist0_mat%>%
+  select(all_of(.[["SampleID"]]))%>%
+  as.dist()
+
+adonis2(distMAT ~ Season, data = Data_PERMANOVA, permutations = permut)
+adonis2(distMAT ~ BdStatus, data = Data_PERMANOVA, permutations = permut)
+adonis2(distMAT ~ Elevation, data = Data_PERMANOVA, permutations = permut)
+adonis2(distMAT ~ Elevation * BdStatus, data = Data_PERMANOVA, permutations = permut)
+adonis2(distMAT ~ BdStatus * Elevation, data = Data_PERMANOVA, permutations = permut)
+adonis2(distMAT ~ BdStatus * Season, data = Data_PERMANOVA, permutations = permut)
+adonis2(distMAT ~ Season * BdStatus, data = Data_PERMANOVA, permutations = permut)
+adonis2(distMAT ~ Season * Elevation * BdStatus, data = Data_PERMANOVA, permutations = permut, by = "terms")
+
+permanova_pairwise(x = distMAT, grp = Data_PERMANOVA$Season, permutations = permut, padj = "BH",)
+permanova_pairwise(x = distMAT, grp = Data_PERMANOVA$Elevation, permutations = permut, padj = "BH",)
+
+
+
