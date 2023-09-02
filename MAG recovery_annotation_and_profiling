@@ -1,0 +1,74 @@
+###################################
+#       Ambystoma altamirani      #
+#     skin metagenome analysis    #
+# Martínez-Ugalde & Rebollar 2023 #
+###################################
+
+#Script for metagenome binning, abudance profiling,MAG fucntional and taxonomic profiling and BGC prediction
+mkdir Bins
+
+metawrap binning -o Binns/METAWRAP/sample/name \
+         -t 16 -m 16 -l 1500 \
+         -a Megahit_assemblies/sample/name/final.contigs.fa --maxbin2 --metabat2 --concoct \
+         Reads/samplename/_1.fastq \
+         Reads/samplename/_2.fastq
+
+#Bin refinement with 50% completeness and 10% contamination
+metawrap bin_refinement -o Bins/ \
+         -t 30 \
+         -A Binns/METAWRAP_COAS_SUMNBD/metabat2_bins/ \
+         -B Binns/METAWRAP_COAS_SUMNBD/maxbin2_bins/ \
+         -C Binns/METAWRAP_COAS_SUMNBD/concoct_bins/ \
+         -c 50 -x 10
+
+#De-replication of the whole set of MAGs
+mkdir Bins_dRep
+dRep dereplicate -p 80 Binns_dRep/ \
+     -g Bins/*.fa -pa 0.90 -sa 0.95 -nc 0.30 \
+     -cm larger --ignoreGenomeQuality
+     
+     
+#Quantification of MAG abudances within samples
+mkdir Quant_bins
+metawrap quant_bins -b Bins_dRep/metawrap_50_10_bins \
+         -o Quant_bins \
+         -a Megahit_assemblies/*.fa \
+         Reads/samplename/_1.fastq \
+         Reads/samplename/_2.fastq
+         
+#Functional profiling using Prokka and eggnog-mapper
+mkdir MAG_anot
+mkdir Func_anot
+prokka  --outdir MAG_anot/name/for/outfile \
+        -prefix MAGname \
+        --cpus 30 \
+        Bins_dRep/name_of_dRep_binmob.fa
+        
+emapper.py --cpu 40 -m diamond --evalue 0.00001 --itype CDS \
+           -i MAG_anot/name_of_mag.fna \
+           -o Func_anot/name_for_directory \
+           --excel --report_orthologs \
+           --data_dir /data/bases/eggnogdb/
+           
+           
+#MAG taxonomic classification using GTDB-Tk
+
+mkdir MAG_GTDBTK
+gtdbtk classify_wf --genome_dir Bins_dRep \
+                   --out_dir MAG_GTDBTK \
+                   --extension fa --cpus 20
+                   
+                   
+#BGC prediction using antiSMASH
+mkdir AntiSmash
+
+antismash --output-dir AntiSmash/name/for/each/single/MAG/prediction \
+          --genefinding-tool none --fullhmmer \
+          --tigrfam --cc-mibig --cb-general \
+          --cb-knownclusters \
+          --cb-subclusters \
+          \--asf --rre --pfam2go \
+          MAG_anot/name_of_each_MAG.gbk
+
+
+
