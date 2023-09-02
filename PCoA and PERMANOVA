@@ -1,10 +1,10 @@
 ###################################
 #       Ambystoma altamirani      #
 #     skin metagenome analysis    #
-# Martínez-Ugalde & Rebollar 2023 #
+# MartÃ­nez-Ugalde & Rebollar 2023 #
 ###################################
 
-#Script for diversity analysis
+# R script for diversity analysis
 
 #Load libraries
 
