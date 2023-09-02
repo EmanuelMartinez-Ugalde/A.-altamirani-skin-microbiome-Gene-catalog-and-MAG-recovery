@@ -1,0 +1,449 @@
+###################################
+#       Ambystoma altamirani      #
+#     skin metagenome analysis    #
+# Martínez-Ugalde & Rebollar 2023 #
+###################################
+
+#Script for DESeq2 
+
+setwd("A:/Escritorio")
+
+#load libraries
+suppressMessages(library(DESeq2))
+suppressMessages(library(tidyverse))
+suppressMessages(library(ggplot2))
+suppressMessages(library(pheatmap))
+suppressMessages(library(ggpubr))
+suppressMessages(library(ggbreak))
+suppressMessages(library(tidyr))
+suppressMessages(library(magrittr))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(hexbin))
+suppressMessages(library(vegan))
+suppressMessages(library(ecole))
+suppressMessages(library(waffle))
+suppressMessages(library(easyalluvial))
+
+#Load files and prepare data for DESeq2
+
+dseq_tab = read.csv(file = "path/to/featureCounts/file.csv", row.names = 1, sep = ";")
+sampinf = read.csv(file = "path/to/metadata/file.csv", sep = ";")ç
+
+gen_func = filter(dseq_tab, COG_category != "No annotation")
+gen_func = gen_func[,3:length(gen_func)]
+
+gene_number_func = colSums(gen_func)
+
+genes_comp = cbind(gene_number_all, gene_number_func)
+
+func_counts = gen_func
+all(colnames(func_counts)%in% row.names(sampinf1))
+
+Seas = c("Summer", "Autumn", "Winter", "Spring")
+BdStat = c("I", "N-I")
+elev = c("3447", "3177","3087")
+
+sampinf1 = sampinf %>%
+  mutate(Season = factor(Season, levels = Seas))%>%
+  mutate(BdStatus = factor(BdStatus, levels = BdStat))%>%
+  mutate(Elevation = factor(Elevation, levels = elev))
+  
+  
+#Create DESeq objects
+
+#Construir objeto Dseq2 y filtrar genes con bajo numero de cuentas
+
+Dif_Func_Season = DESeqDataSetFromMatrix(countData = func_counts,
+                               colData = sampinf1,
+                               design = ~ Season)
+
+Dif_Func_Elevation = DESeqDataSetFromMatrix(countData = func_counts,
+                               colData = sampinf1,
+                               design = ~ Elevation)
+
+Dif_Bd_func = DESeqDataSetFromMatrix(countData = func_counts,
+                               colData = sampinf1,
+                               design = ~ SeasBd)
+                               
+                               
+#Filter reads with low counts
+
+nrow(func_counts)
+count
+sum(rowSums(func_counts)>=10)
+
+genes_fun_more10_season = rowSums(counts(Dif_Func_Season)) >= 10
+genes_fun_more10_elev = rowSums(counts(Dif_Func_Elevation)) >= 10
+
+genes_fun_more10_season = Dif_Func_Season[genes_fun_more10_season,]
+genes_fun_more10_elev = Dif_Func_Elevation[genes_fun_more10_elev,]
+
+genes_fun_more10_Bd = rowSums(counts(Dif_Bd_func)) >= 10
+genes_fun_more10_Bd = Dif_Bd_func[genes_fun_more10_Bd,]
+
+
+#Run DESeq
+
+dseq_fun_season = DESeq(genes_fun_more10_season)
+dseq_fun_elevation = DESeq(genes_fun_more10_elev)
+dseq_fun_Bd = DESeq(genes_fun_more10_Bd)
+
+
+#Obtain a resume for each comparison
+
+fun_SumAu = results(dseq_fun_season,contrast = c("Season", "Summer", "Autumn"))
+fun_AuWin = results(dseq_fun_season,contrast = c("Season", "Autumn", "Winter"))
+fun_WinSp = results(dseq_fun_season,contrast = c("Season", "Winter", "Spring"))
+
+fun_HM = results(dseq_fun_elevation,contrast = c("Elevation", "3447", "3177"))
+fun_HL = results(dseq_fun_elevation,contrast = c("Elevation", "3447", "3087"))
+fun_ML = results(dseq_fun_elevation,contrast = c("Elevation", "3177", "3087"))
+
+
+fun_Bd_V = results(dseq_fun_Bd,contrast = c("SeasBd", "SummerI", "SummerN-I"))
+fun_Bd_O = results(dseq_fun_Bd,contrast = c("SeasBd", "AutumnI", "AutumnN-I"))
+fun_Bd_I = results(dseq_fun_Bd,contrast = c("SeasBd", "WinterI", "WinterN-I"))
+fun_Bd_P = results(dseq_fun_Bd,contrast = c("SeasBd", "SpringI", "SpringN-I"))
+
+
+#Recover los LFC and calculate FDR
+
+fun_SumAu_lfc = lfcShrink(dseq_fun_season,contrast = c("Season", "Summer", "Autumn"), type = "ashr")
+fun_AuWin_lfc = lfcShrink(dseq_fun_season,contrast = c("Season", "Autumn", "Winter"), type = "ashr")
+fun_WinSp_lfc = lfcShrink(dseq_fun_season,contrast = c("Season", "Winter", "Spring"), type = "ashr")
+
+fun_HM_lfc = lfcShrink(dseq_fun_elevation,contrast = c("Elevation", "3447", "3177"), type = "ashr")
+fun_HL_lfc = lfcShrink(dseq_fun_elevation,contrast = c("Elevation", "3447", "3087"), type = "ashr")
+fun_ML_lfc = lfcShrink(dseq_fun_elevation,contrast = c("Elevation", "3177", "3087"), type = "ashr")
+
+fun_Bd_lfc_V = lfcShrink(dseq_fun_Bd,contrast = c("SeasBd", "SummerI", "SummerN-I"), type = "ashr")
+fun_Bd_lfc_O = lfcShrink(dseq_fun_Bd,contrast = c("SeasBd", "AutumnI", "AutumnN-I"), type = "ashr")
+fun_Bd_lfc_I = lfcShrink(dseq_fun_Bd,contrast = c("SeasBd", "WinterI", "WinterN-I"), type = "ashr")
+fun_Bd_lfc_P = lfcShrink(dseq_fun_Bd,contrast = c("SeasBd", "SpringI", "SpringN-I"), type = "ashr")
+
+
+#Rcover genes with a  p-adj lower than 0.01 and a lfc hogher than 2
+Significative_genes_count = numeric()
+variable = c("padj", "log2FoldChange")
+numero = c(0.01, 2, -2)
+
+#Summer - Autumn
+significative_genes_SA_func = as.data.frame(fun_SumAu_lfc)
+significative_genes_SA_func = na.omit(significative_genes_SA_func)
+
+Sig_SA_fun = significative_genes_SA_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Sumer-Autumn"] = nrow(Sig_SA_fun)
+
+significative_genes_SA_func = significative_genes_SA_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in autumn",
+                                 .data[[variable[[2]]]] >=  numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in summer"))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+#Autumn - Winter
+significative_genes_AW_func = as.data.frame(fun_AuWin_lfc)
+significative_genes_AW_func = na.omit(significative_genes_AW_func)
+
+Sig_AW_fun = significative_genes_AW_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Autumn-Winter"] = nrow(Sig_AW_fun)
+
+significative_genes_AW_func = significative_genes_AW_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in winter",
+                                 .data[[variable[[2]]]] >=  numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in autumn"))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+#Winter - Spring
+significative_genes_WS_func = as.data.frame(fun_WinSp_lfc)
+significative_genes_WS_func = na.omit(significative_genes_WS_func)
+
+Sig_WS_fun = significative_genes_WS_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Winter-Spring"] = nrow(Sig_WS_fun)
+
+significative_genes_WS_func = significative_genes_WS_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in spring",
+                                 .data[[variable[[2]]]] >=  numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in winter"))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+
+####
+####
+
+#High - Medium
+significative_genes_HM_func = as.data.frame(fun_HM_lfc)
+significative_genes_HM_func = na.omit(significative_genes_HM_func)
+
+Sig_HM_fun = significative_genes_HM_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional High-Medium"] = nrow(Sig_HM_fun)
+
+significative_genes_HM_func = significative_genes_HM_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Medium",
+                                 .data[[variable[[2]]]] >=  numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in High"))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+
+#Medium - Low
+significative_genes_ML_func = as.data.frame(fun_ML_lfc)
+significative_genes_ML_func = na.omit(significative_genes_ML_func)
+
+Sig_ML_fun = significative_genes_ML_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Medium-Low"] = nrow(Sig_ML_fun)
+
+significative_genes_ML_func = significative_genes_ML_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Low",
+                                 .data[[variable[[2]]]] >=  numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Medium"))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+#High - Low
+significative_genes_HL_func = as.data.frame(fun_HL_lfc)
+significative_genes_HL_func = na.omit(significative_genes_HL_func)
+
+Sig_HL_fun = significative_genes_HL_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional High-Low"] = nrow(Sig_HL_fun)
+
+significative_genes_HL_func = significative_genes_HL_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Low",
+                                 .data[[variable[[2]]]] >=  numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in High"))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+#####
+significative_genes_BdV_func = as.data.frame(fun_Bd_lfc_V)
+significative_genes_BdV_func = na.omit(significative_genes_BdV_func)
+
+Sig_BdV_func = significative_genes_BdV_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Bd Verano"] = nrow(Sig_BdV_func)
+
+significative_genes_BdV_func = significative_genes_BdV_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in No Infected",
+                                 .data[[variable[[2]]]] >= numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Infected",))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+#####
+
+significative_genes_BdO_func = as.data.frame(fun_Bd_lfc_O)
+significative_genes_BdO_func = na.omit(significative_genes_BdO_func)
+
+Sig_BdO_func = significative_genes_BdO_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Bd Otoño"] = nrow(Sig_BdO_func)
+
+significative_genes_BdO_func = significative_genes_BdO_func%>%
+   mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in No Infected",
+                                 .data[[variable[[2]]]] >= numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Infected",))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+#####
+significative_genes_BdI_func = as.data.frame(fun_Bd_lfc_I)
+significative_genes_BdI_func = na.omit(significative_genes_BdI_func)
+
+Sig_BdI_func = significative_genes_BdI_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Bd Invierno"] = nrow(Sig_BdI_func)
+
+significative_genes_BdI_func = significative_genes_BdI_func%>%
+   mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in No Infected",
+                                 .data[[variable[[2]]]] >= numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Infected",))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+#####
+#
+
+significative_genes_BdP_func = as.data.frame(fun_Bd_lfc_P)
+significative_genes_BdP_func = na.omit(significative_genes_BdP_func)
+
+Sig_BdP_func = significative_genes_BdP_func %>%
+  filter(.data[[variable[[1]]]] <= numero[[1]],
+         .data[[variable[[2]]]] <= numero[[3]] | .data[[variable[[2]]]] >=  numero[[2]])
+
+Significative_genes_count["Functional Bd Primavera"] = nrow(Sig_BdP_func)
+
+significative_genes_BdP_func = significative_genes_BdP_func%>%
+  mutate(significant = case_when(.data[[variable[[2]]]] <= numero[[3]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in No Infected",
+                                 .data[[variable[[2]]]] >= numero[[2]] & .data[[variable[[1]]]] <= numero[[1]] ~ "Diff in Infected",))%>%
+  mutate(significant = if_else(is.na(significant), "No significant", significant))
+
+###
+Significative_genes_count = as.data.frame(Significative_genes_count)
+
+
+
+#Create MAplots for DESeq results
+
+MAPLOT_SA = significative_genes_SA_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             color=significant)) + 
+  geom_point(alpha=0.8, size=3) + 
+  scale_color_manual(values = c("#d66610ff","#fcb91eff","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.3) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-30, 30))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold hange")+
+  theme_classic()
+
+ 
+AW_MAplot_func = significative_genes_AW_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.8, size=3) + 
+  scale_color_manual(values = c("#d66610ff","#7e587eff","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-30, 30))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold change")+
+  theme_classic()
+
+WS_MAplot_func = significative_genes_WS_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.8, size=3) + 
+  scale_color_manual(values = c("#73a16cff","#7e587eff","#B6B6B4" )) +
+ geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-30, 30))+
+  xlab("Log2 Mean expression") + 
+  ylab("Fold change")+
+  theme_classic()
+
+
+###
+
+HM_MAplot_func = significative_genes_HM_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.8, size=3) + 
+  scale_color_manual(values = c("#006680a6","#c83771a6","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-26, 26))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold Change")+
+  theme_classic()
+
+ML_MAplot_func = significative_genes_ML_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.8, size=3) + 
+  scale_color_manual(values = c("#784421a6","#c83771a6","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-26, 26))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold Change")+
+  theme_classic()
+
+HL_MAplot_func = significative_genes_HL_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.8, size=3) + 
+  scale_color_manual(values = c("#006680a6","#784421a6","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-26, 26))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold Change")+
+  theme_classic()
+
+
+###########################
+
+BdV_MAplot_fun = significative_genes_BdV_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.4, size=3) + 
+  scale_color_manual(values = c("#bf812d","#35978f","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-30, 30))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold Change")+
+  theme_classic()
+
+BdO_MAplot_fun = significative_genes_BdO_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.4, size=3) + 
+  scale_color_manual(values = c("#bf812d","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-30, 30))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold Change")+
+  theme_classic()
+
+BdI_MAplot_fun = significative_genes_BdI_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.8, size=3) + 
+  scale_color_manual(values = c("#bf812d","#35978f","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-30, 30))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold Change")+
+  theme_classic()
+
+BdP_MAplot_fun = significative_genes_BdP_func %>%
+  ggplot(aes(x=log2(baseMean), 
+             y=log2FoldChange,
+             colour=significant)) + 
+  geom_point(alpha=0.4, size=3) + 
+  scale_color_manual(values = c("#35978f","#B6B6B4" )) +
+  geom_hline(yintercept = c(-2,2), color=c("black", "black"), linewidth = 1,
+             linetype="solid", alpha = 0.5) +
+  scale_y_continuous(breaks = c(-30,-20,-10,0,10,20,30))+
+  scale_x_continuous(limits = c(0, NA))+
+  expand_limits(y = c(-30, 30))+
+  xlab("Log2 Mean expression") + 
+  ylab("Log2 Fold Change")+
+  theme_classic()
